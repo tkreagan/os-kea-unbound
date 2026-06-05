@@ -1,0 +1,246 @@
+<form>
+    <field>
+        <type>header</type>
+        <label>About Kea Unbound DDNS</label>
+    </field>
+    <field>
+        <type>info</type>
+        <label>Documentation</label>
+        <help>
+<![CDATA[
+<h4>Kea Unbound DDNS Integration</h4>
+
+<p>Bridges Kea DHCP and Unbound DNS so hostnames resolve the moment a lease is issued,
+without waiting for a DNS reload or manual entry.</p>
+
+<h4>How It Works</h4>
+
+<p><strong>DDNS Listener (real-time):</strong> Receives RFC 2136 DNS UPDATE packets from
+kea-dhcp-ddns on <code>127.0.0.1:{{ port }}</code> and immediately registers or removes
+A/AAAA and PTR records in Unbound. Records managed by Unbound Host Overrides are never
+touched.</p>
+
+<p><strong>Static Reservation Sync:</strong> Registers Kea static reservations in Unbound
+before any client connects. Fires on Kea start, config change, and Unbound reload.
+Manual button available on the Lease Audit tab.</p>
+
+<p><strong>Active Lease Sync:</strong> Bulk-syncs all active Kea leases into Unbound with
+TTLs matching remaining lease time. Repopulates Unbound after a restart and catches leases
+the DDNS stream may have missed. Fires on Kea start, config change, and Unbound reload.
+Manual button available on the Lease Audit tab.</p>
+
+<p><strong>DNS Record Cleaning:</strong> Two cleanup modes handle records Kea never
+explicitly deleted — see the DNS Record Cleaning settings section below. The Lease Audit
+tab shows a full preview of what each cleanup would remove.</p>
+
+<h4>Configuring Kea for DDNS</h4>
+
+<p>Kea's DHCP-DDNS daemon must be running and forwarding updates to
+<code>127.0.0.1:{{ port }}</code>. For each subnet, add to the Kea subnet config:</p>
+
+<pre><code>"ddns-send-updates": true,
+"ddns-override-no-update": true,
+"ddns-override-client-update": true,
+"hostname-char-replacement": "-"</code></pre>
+
+<p>Use the <strong>Kea Config Check</strong> tab to verify subnet DDNS configuration.</p>
+
+<h4>Tabs</h4>
+<ul>
+  <li><strong>Settings:</strong> Enable the plugin; configure sync, cleanup, and TSIG</li>
+  <li><strong>Kea Config Check:</strong> Verify DDNS is configured in Kea subnets</li>
+  <li><strong>Lease Audit:</strong> Inspect all DNS records, preview and run cleanup, trigger syncs</li>
+  <li><strong>Log File:</strong> Daemon, sync, audit, and cleanup logs</li>
+</ul>
+]]>
+        </help>
+    </field>
+
+    <field>
+        <type>header</type>
+        <label>Service</label>
+    </field>
+    <field>
+        <id>general.general.enabled</id>
+        <label>Enabled</label>
+        <type>checkbox</type>
+        <help>Enable Kea to Unbound DNS registration. When enabled, DNS UPDATE packets from kea-dhcp-ddns are received and translated into Unbound local_data entries.</help>
+    </field>
+
+    <field>
+        <type>header</type>
+        <label>DNS Synchronization</label>
+    </field>
+    <field>
+        <id>general.general.sync_static_reservations</id>
+        <label>Sync Kea static reservations to Unbound</label>
+        <type>checkbox</type>
+        <help>Register Kea static reservations in Unbound DNS so they resolve immediately (before any client connects). Names already managed by OPNsense in Unbound (Host Overrides, or "Register DHCP Static Mappings") are skipped, so this is safe whether or not that Unbound setting is on. Requires the Kea DHCP service (kea-dhcp4/kea-dhcp6) to be running.</help>
+    </field>
+
+    <field>
+        <id>general.general.sync_dynamic_leases</id>
+        <label>Sync Kea active leases to Unbound</label>
+        <type>checkbox</type>
+        <help>Register Kea active leases in Unbound DNS with TTL matching lease expiration. Repopulates Unbound on startup and refreshes entries periodically. Requires the Kea DHCP service (kea-dhcp4/kea-dhcp6) to be running.</help>
+    </field>
+
+    <field>
+        <type>header</type>
+        <label>DNS Record Cleaning</label>
+    </field>
+    <field>
+        <id>general.general.aggressive_cleanup</id>
+        <label>Clean up old IPs on lease update</label>
+        <type>checkbox</type>
+        <help>When a new DHCP lease is registered via DDNS UPDATE, remove any previous IP addresses for that hostname that are no longer in Kea's lease or reservation table. This handles the common case where Kea issues a client a new IP without sending a DNS DELETE for the old one (standard Kea behaviour on IP change). Best-effort: the ADD is always recorded and the DDNS response is always sent regardless of whether cleanup succeeds. Requires Kea to be reachable at the time of the update. Records managed by Unbound Host Overrides are never touched.</help>
+    </field>
+    <field>
+        <id>general.general.enable_auto_clean</id>
+        <label>Automatically clean stale DNS records</label>
+        <type>checkbox</type>
+        <help>Periodically compare all of Unbound's runtime DNS records against all Kea leases, reservations, and Unbound Host Overrides, and remove any record not backed by one of those sources. Requires Kea to be reachable; the job is skipped if Kea is unavailable. Warning: this removes ANY A/AAAA/PTR record in Unbound's runtime local-data not backed by Kea or an Unbound Host Override — records injected by another tool or script will be erased. Use the Lease Audit tab to preview exactly what would be removed before enabling this.</help>
+    </field>
+    <field>
+        <id>general.general.auto_clean_interval</id>
+        <label>Auto-clean frequency</label>
+        <type>dropdown</type>
+        <help>How often to run the scheduled bulk cleanup. Only used when auto-clean is enabled. The manual Clean button on the Lease Audit tab runs the same operation on demand.</help>
+    </field>
+
+    <field>
+        <type>header</type>
+        <label>Kea-Unbound DDNS Listener</label>
+        <advanced>true</advanced>
+    </field>
+    <field>
+        <id>general.general.port</id>
+        <label>Port</label>
+        <type>text</type>
+        <hint>53535</hint>
+        <advanced>true</advanced>
+        <help>UDP port to listen on for DNS UPDATE packets from kea-dhcp-ddns. Must match the destination port configured in kea-dhcp-ddns. Default 53535.</help>
+    </field>
+
+    <field>
+        <type>header</type>
+        <label>TSIG Authentication</label>
+        <advanced>true</advanced>
+    </field>
+    <field>
+        <type>info</type>
+        <advanced>true</advanced>
+        <label>Status</label>
+        <help><![CDATA[<span class="text-warning"><strong>TSIG authentication has not been tested in this release and is disabled.</strong> The listener only accepts connections from 127.0.0.1, so unsigned updates from kea-dhcp-ddns are safe on a single host. These fields are shown for reference only.</span>]]></help>
+    </field>
+    <field>
+        <id>general.general.enable_tsig</id>
+        <label>Enable TSIG authentication</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Require TSIG signatures on DNS UPDATE packets from kea-dhcp-ddns. When disabled, packets are accepted unsigned (safe since the listener only accepts connections from 127.0.0.1). When enabled, kea-dhcp-ddns must be configured to sign updates with the matching key name and algorithm below. NOTE: Changes to TSIG settings require clicking "Apply" to restart the daemon and take effect.</help>
+    </field>
+    <field>
+        <id>general.general.tsig_key_name</id>
+        <label>TSIG Key Name</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Name of the TSIG key. kea-dhcp-ddns must be configured to sign updates with this exact key name. Only used when TSIG is enabled.</help>
+    </field>
+    <field>
+        <id>general.general.tsig_key_secret</id>
+        <label>TSIG Key Secret</label>
+        <type>password</type>
+        <advanced>true</advanced>
+        <help>Base64-encoded HMAC secret. Must match the secret configured in kea-dhcp-ddns. Only used when TSIG is enabled.</help>
+    </field>
+    <field>
+        <id>general.general.tsig_algorithm</id>
+        <label>TSIG Algorithm</label>
+        <type>dropdown</type>
+        <advanced>true</advanced>
+        <help>Algorithm used to sign DNS UPDATE packets. Must match the algorithm configured in kea-dhcp-ddns. HMAC-SHA256 is recommended. Only used when TSIG is enabled.</help>
+    </field>
+
+    <field>
+        <type>header</type>
+        <label>Kea Service Control Connection</label>
+        <advanced>true</advanced>
+    </field>
+    <field>
+        <type>info</type>
+        <label>Status</label>
+        <advanced>true</advanced>
+        <help><![CDATA[
+<strong>Reserved for future use.</strong> The plugin currently connects to the
+Kea daemons automatically: it reads the active Kea configuration to find each
+daemon's control socket (unix socket or HTTP listener) and falls back to the
+standard OPNsense control sockets. The fields below are disabled and not yet
+honored — they are placeholders for a future release that will let you override
+the connection manually.]]></help>
+    </field>
+    <field>
+        <id>general.connection.mode</id>
+        <label>Connection mode</label>
+        <type>dropdown</type>
+        <advanced>true</advanced>
+        <help>How to reach the Kea daemons. Auto-detect reads the running Kea configuration.</help>
+    </field>
+    <field>
+        <id>general.connection.dhcp4_socket</id>
+        <label>DHCPv4 unix socket</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Path to the kea-dhcp4 control socket (used when mode is Unix socket).</help>
+    </field>
+    <field>
+        <id>general.connection.dhcp6_socket</id>
+        <label>DHCPv6 unix socket</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Path to the kea-dhcp6 control socket (used when mode is Unix socket).</help>
+    </field>
+    <field>
+        <id>general.connection.dhcp4_http_host</id>
+        <label>DHCPv4 HTTP host</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Host of the kea-dhcp4 HTTP control listener (used when mode is HTTP).</help>
+    </field>
+    <field>
+        <id>general.connection.dhcp4_http_port</id>
+        <label>DHCPv4 HTTP port</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Port of the kea-dhcp4 HTTP control listener (default 8004).</help>
+    </field>
+    <field>
+        <id>general.connection.dhcp6_http_host</id>
+        <label>DHCPv6 HTTP host</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Host of the kea-dhcp6 HTTP control listener (used when mode is HTTP).</help>
+    </field>
+    <field>
+        <id>general.connection.dhcp6_http_port</id>
+        <label>DHCPv6 HTTP port</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Port of the kea-dhcp6 HTTP control listener (default 8006).</help>
+    </field>
+    <field>
+        <id>general.connection.http_tls</id>
+        <label>Use HTTPS</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Connect to the HTTP control listener over TLS.</help>
+    </field>
+    <field>
+        <id>general.connection.http_tls_verify</id>
+        <label>Verify TLS certificate</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Verify the daemon's TLS certificate. Leave off for self-signed OPNsense control certificates.</help>
+    </field>
+
+</form>

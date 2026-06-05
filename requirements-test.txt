@@ -1,0 +1,5 @@
+pytest>=7.0
+pytest-timeout
+dnspython>=2.8
+requests
+paramiko
